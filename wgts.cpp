@@ -566,8 +566,8 @@ static void draw(client_state *st) {
       glClear(GL_COLOR_BUFFER_BIT);
 
       for (const int index : st->layers[i].enabled_channels) {
-        glActiveTexture(GL_TEX_INDEX[i]);
-        glBindTexture(GL_TEXTURE_2D, st->layers[i].texture[read_buffer]);
+        glActiveTexture(GL_TEX_INDEX[index]);
+        glBindTexture(GL_TEXTURE_2D, st->layers[index].texture[read_buffer]);
       }
 
       glUniform2f(st->layers[i].u_resolution, st->width, st->height);
