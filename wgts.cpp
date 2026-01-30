@@ -171,38 +171,13 @@ struct client_state {
 };
 
 static constexpr GLint GL_TEX_INDEX[] = {
-    GL_TEXTURE0,
-    GL_TEXTURE1, 
-    GL_TEXTURE2,
-    GL_TEXTURE3,
-    GL_TEXTURE4, 
-    GL_TEXTURE5,
-    GL_TEXTURE6,
-    GL_TEXTURE7, 
-    GL_TEXTURE8,
-    GL_TEXTURE9,
-    GL_TEXTURE10, 
-    GL_TEXTURE11,
-    GL_TEXTURE12,
-    GL_TEXTURE13, 
-    GL_TEXTURE14,
-    GL_TEXTURE15,
-    GL_TEXTURE16,
-    GL_TEXTURE17, 
-    GL_TEXTURE18,
-    GL_TEXTURE19,
-    GL_TEXTURE20, 
-    GL_TEXTURE21,
-    GL_TEXTURE22,
-    GL_TEXTURE23, 
-    GL_TEXTURE24,
-    GL_TEXTURE25,
-    GL_TEXTURE26, 
-    GL_TEXTURE27,
-    GL_TEXTURE28,
-    GL_TEXTURE29, 
-    GL_TEXTURE30,
-    GL_TEXTURE31,
+    GL_TEXTURE0,  GL_TEXTURE1,  GL_TEXTURE2,  GL_TEXTURE3,  GL_TEXTURE4,
+    GL_TEXTURE5,  GL_TEXTURE6,  GL_TEXTURE7,  GL_TEXTURE8,  GL_TEXTURE9,
+    GL_TEXTURE10, GL_TEXTURE11, GL_TEXTURE12, GL_TEXTURE13, GL_TEXTURE14,
+    GL_TEXTURE15, GL_TEXTURE16, GL_TEXTURE17, GL_TEXTURE18, GL_TEXTURE19,
+    GL_TEXTURE20, GL_TEXTURE21, GL_TEXTURE22, GL_TEXTURE23, GL_TEXTURE24,
+    GL_TEXTURE25, GL_TEXTURE26, GL_TEXTURE27, GL_TEXTURE28, GL_TEXTURE29,
+    GL_TEXTURE30, GL_TEXTURE31,
 };
 
 static void init_multipass(client_state *st) {
@@ -552,31 +527,30 @@ static void draw(client_state *st) {
   };
 
   // Multipass
-  // for (ShaderLayer &shader : st->layers) {
-  for (std::size_t i = 0; i < st->layers.size(); ++i) {
-    if (st->layers[i].enabled && st->layers[i].multipass) {
-      int read_buffer = st->layers[i].current_buffer;
-      int write_buffer = 1 - st->layers[i].current_buffer;
+  for (ShaderLayer &shader : st->layers) {
+    if (shader.enabled && shader.multipass) {
+      int read_buffer = shader.current_buffer;
+      int write_buffer = 1 - shader.current_buffer;
 
-      glUseProgram(st->layers[i].prog);
+      glUseProgram(shader.prog);
 
-      glBindFramebuffer(GL_FRAMEBUFFER, st->layers[i].fbo[write_buffer]);
+      glBindFramebuffer(GL_FRAMEBUFFER, shader.fbo[write_buffer]);
       glViewport(0, 0, st->width, st->height);
       glClearColor(0.f, 0.f, 0.f, 0.f);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      for (const int index : st->layers[i].enabled_channels) {
+      for (const int index : shader.enabled_channels) {
         glActiveTexture(GL_TEX_INDEX[index]);
         glBindTexture(GL_TEXTURE_2D, st->layers[index].texture[read_buffer]);
       }
 
-      glUniform2f(st->layers[i].u_resolution, st->width, st->height);
-      glUniform1f(st->layers[i].u_time, t);
-      glUniform1f(st->layers[i].u_frame, st->frame_count);
+      glUniform2f(shader.u_resolution, st->width, st->height);
+      glUniform1f(shader.u_time, t);
+      glUniform1f(shader.u_frame, st->frame_count);
 
       draw_fullscreen_quad(0);
 
-      st->layers[i].current_buffer = write_buffer;
+      shader.current_buffer = write_buffer;
     }
   }
 
@@ -618,7 +592,18 @@ static void draw(client_state *st) {
   eglSwapBuffers(st->egl_display, st->egl_surface);
   st->frame_count++;
 }
-int main() {
+
+int main(int argc, char *argv[]) {
+  if (argc > 1) {
+    std::string_view arg = argv[1];
+    if (arg == "-h" || arg == "--help") {
+      printf(
+          "Displays shaders in a transparent window for Wayland. Place your shaders (up to 32) numbered as 'shader0.frag', 'shader1.frag', etc. in same directory.\n"
+          "You may provide shader[n].vert or a default will be used. Settings generated if no 'wayshaders.conf' in same directory.\n"
+          "\nCreated by Genevra Rose\n");
+      return 0;
+    }
+  }
   std::string programClass = "";
 
   client_state st{};
