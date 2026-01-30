@@ -2,7 +2,5 @@ xdg-shell.c
 xdg-shell.h
 xdg-shell.o
 wayshaders
-shader.vert
-shader.frag
-shader2.frag
+shader*
 wayshaders.conf

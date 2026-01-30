@@ -11,11 +11,13 @@
 #include <GL/gl.h>
 #include <chrono>
 #include <cmath>
-#include <unordered_map>
-#include <string>
+#include <cstdarg>
 #include <fstream>
 #include <sstream>
-#include <cstdarg>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "xdg-shell.h"
 
 static const char *default_vert = R"(
@@ -28,26 +30,16 @@ void main() {
 static const char *vertex_shader_src;
 
 static const char *default_frag = R"(
-// Perfect circle test
 #version 120
 uniform vec2  u_resolution;
 uniform float u_time;
 
 void main() {
-    // Get pixel coordinates
     vec2 fragCoord = gl_FragCoord.xy;
-
-    // Center point in pixels
     vec2 center = u_resolution * 0.5;
-
-    // Distance in pixels (preserves aspect ratio)
     float dist = distance(fragCoord, center);
-
-    // Circle radius in pixels (so it's always round)
     float radius = 50.0;
-
     if (dist < radius) {
-        // Pink color
         vec3 color = vec3(1.0, 0.4, 0.7);
         gl_FragColor = vec4(color, 0.9);
     } else {
@@ -57,87 +49,102 @@ void main() {
 )";
 #pragma region Settings
 struct Settings {
-    std::unordered_map<std::string, std::string> kv;
+  std::unordered_map<std::string, std::string> kv;
 
-    bool load(const std::string& path) {
-        std::ifstream f(path);
-        if (!f) return false;
+  bool load(const std::string &path) {
+    std::ifstream f(path);
+    if (!f)
+      return false;
 
-        std::string line;
-        while (std::getline(f, line)) {
-            if (line.empty()) continue;
+    std::string line;
+    while (std::getline(f, line)) {
+      if (line.empty())
+        continue;
 
-            auto eq = line.find('=');
-            if (eq == std::string::npos) continue;
+      auto eq = line.find('=');
+      if (eq == std::string::npos)
+        continue;
 
-            std::string key = line.substr(0, eq);
-            std::string val = line.substr(eq + 1);
+      std::string key = line.substr(0, eq);
+      std::string val = line.substr(eq + 1);
 
-            trim(key);
-            trim(val);
+      trim(key);
+      trim(val);
 
-            kv[key] = val;
-        }
-        return true;
+      kv[key] = val;
     }
+    return true;
+  }
 
-    bool save(const std::string& path) const {
-        std::ofstream f(path);
-        if (!f) return false;
+  bool save(const std::string &path) const {
+    std::ofstream f(path);
+    if (!f)
+      return false;
 
-        for (auto& [k, v] : kv)
-            f << k << " = " << v << "\n";
+    for (auto &[k, v] : kv)
+      f << k << " = " << v << "\n";
 
-        return true;
-    }
+    return true;
+  }
 
-    int get_int(const std::string& key, int def) const {
-        auto it = kv.find(key);
-        if (it == kv.end()) return def;
-        return std::stoi(it->second);
-    }
+  int get_int(const std::string &key, int def) const {
+    auto it = kv.find(key);
+    if (it == kv.end())
+      return def;
+    return std::stoi(it->second);
+  }
 
-    std::string get_string(const std::string& key,
-                           const std::string& def) const {
-        auto it = kv.find(key);
-        if (it == kv.end()) return def;
-        return it->second;
-    }
+  std::string get_string(const std::string &key, const std::string &def) const {
+    auto it = kv.find(key);
+    if (it == kv.end())
+      return def;
+    return it->second;
+  }
 
-    void set_int(const std::string& key, int v) {
-        kv[key] = std::to_string(v);
-    }
+  void set_int(const std::string &key, int v) { kv[key] = std::to_string(v); }
 
-    void set_string(const std::string& key, const std::string& v) {
-        kv[key] = v;
-    }
+  void set_string(const std::string &key, const std::string &v) { kv[key] = v; }
 
 private:
-    static void trim(std::string& s) {
-        const char* ws = " \t\n\r";
-        s.erase(0, s.find_first_not_of(ws));
-        s.erase(s.find_last_not_of(ws) + 1);
-    }
+  static void trim(std::string &s) {
+    const char *ws = " \t\n\r";
+    s.erase(0, s.find_first_not_of(ws));
+    s.erase(s.find_last_not_of(ws) + 1);
+  }
 };
 #pragma endregion
+
 static bool debug = false;
-void logDebug(const char* format, ...) {
-    if (!debug) return;
-    
-    va_list args;
-    va_start(args, format);
-    vprintf(format, args);
-    va_end(args);
-    printf("\n");
+void logDebug(const char *format, ...) {
+  if (!debug)
+    return;
+
+  va_list args;
+  va_start(args, format);
+  vprintf(format, args);
+  va_end(args);
+  printf("\n");
 }
 
 static const char *fragment_shader_src;
 static const char *fragment_shader2_src;
+struct ShaderLayer {
+  GLuint prog;
+  int num; // layer num, 0 = base
+  GLint u_resolution;
+  GLint u_time;
+  GLint u_frame;
+  GLuint fbo[2];
+  GLuint texture[2];
+  int current_buffer;
+  bool multipass;
+  bool enabled;
+
+  int setting_wrap_t;
+  int setting_wrap_s;
+};
 struct client_state {
   Settings settings;
-  int setting_wrap_t = 0;
-  int setting_wrap_s = 0;
-  
   wl_display *display;
   wl_registry *registry;
   wl_compositor *compositor;
@@ -158,27 +165,13 @@ struct client_state {
   bool running;
   int frame_count = 0;
 
-  GLuint shader_prog;
-  GLint u_resolution;
-  GLint u_time;
-  GLint u_frame;
-  GLuint fbo[2];
-  GLuint texture[2];
-  int current_buffer;
-  bool base_multipass = false;
-
-  GLuint layer1_prog;
-  GLint layer1_u_resolution, layer1_u_time, layer1_u_frame;
-  GLuint layer1_fbo[2], layer1_texture[2];
-  int layer1_current_buffer;
-  bool layer1_multipass = false;
-  bool layer1_enabled;
-
+  std::vector<ShaderLayer> layers;
   GLuint quad_vao, quad_vbo;
 };
 
 static void init_multipass(client_state *st) {
   // Generate framebuffers and textures
+  /*
   glGenFramebuffers(2, st->fbo);
   glGenTextures(2, st->texture);
 
@@ -248,10 +241,57 @@ static void init_multipass(client_state *st) {
     }
 
     logDebug("Layer1 multipass initialized");
+  }*/
+  for (ShaderLayer &shader : st->layers) {
+    logDebug("Process shader%d multipass", shader.num);
+    glUseProgram(shader.prog);
+    if (shader.multipass) {
+      glGenFramebuffers(2, shader.fbo);
+      glGenTextures(2, shader.texture);
+
+      for (int i = 0; i < 2; i++) {
+        // Texture
+        glBindTexture(GL_TEXTURE_2D, shader.texture[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, st->width, st->height, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+                        shader.setting_wrap_s);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+                        shader.setting_wrap_t);
+
+        // Texture to framebuffer
+        glBindFramebuffer(GL_FRAMEBUFFER, shader.fbo[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, shader.texture[i], 0);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE) {
+          logDebug("Framebuffer %d not complete!", i);
+        }
+      }
+
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      shader.current_buffer = 0;
+
+      // Check all possible channel vars
+      for (std::size_t i = 0; i < st->layers.size(); i++) {
+        logDebug("%d loop", i);
+        std::string name = "iChannel" + std::to_string(i);
+        GLint channel = glGetUniformLocation(shader.prog, name.c_str());
+        if (channel != -1) {
+          glUniform1i(channel, i);
+          logDebug("Found %s in Shader %d", name.c_str(), shader.num);
+        }
+      }
+    }
   }
 }
 
 static void resize_multipass(client_state *st) {
+  logDebug("Resized window!");
+  /*
   // Delete old textures
   glDeleteTextures(2, st->texture);
   if (st->layer1_multipass) {
@@ -278,27 +318,33 @@ static void resize_multipass(client_state *st) {
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   logDebug("Resized FBO textures to %dx%d", st->width, st->height);
+*/
+  for (ShaderLayer &shader : st->layers) {
+    if (shader.multipass) {
+      glDeleteTextures(2, shader.texture);
+      // My textures yay
+      glGenTextures(2, shader.texture);
 
-  if (st->layer1_multipass) {
-    glGenTextures(2, st->layer1_texture);
+      for (int i = 0; i < 2; i++) {
+        glBindTexture(GL_TEXTURE_2D, shader.texture[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, st->width, st->height, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+                        shader.setting_wrap_s);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+                        shader.setting_wrap_t);
 
-    for (int i = 0; i < 2; i++) {
-      glBindTexture(GL_TEXTURE_2D, st->layer1_texture[i]);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, st->width, st->height, 0, GL_RGBA,
-                   GL_UNSIGNED_BYTE, NULL);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
+        // Reattach to framebuffer
+        glBindFramebuffer(GL_FRAMEBUFFER, shader.fbo[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, shader.texture[i], 0);
+      }
 
-      // Reattach to framebuffer
-      glBindFramebuffer(GL_FRAMEBUFFER, st->layer1_fbo[i]);
-      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                             GL_TEXTURE_2D, st->layer1_texture[i], 0);
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      logDebug("Resized FBO textures to %dx%d", st->width, st->height);
     }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    logDebug("Resized layer1 FBO textures to %dx%d", st->width, st->height);
   }
 }
 
@@ -362,6 +408,7 @@ static void toplevel_configure(void *data, xdg_toplevel *, int32_t width,
     st->height = height;
     // logDebug("Window resize");
     resize_multipass(st);
+
     wl_egl_window_resize(st->egl_window, width, height, 0, 0);
   }
 }
@@ -421,13 +468,13 @@ static GLuint compile_shader(GLenum type, const char *src) {
     glGetShaderInfoLog(s, 512, NULL, log);
     logDebug("Shader compilation failed:\n%s", log);
   } else {
-    logDebug("Shader comp success");
+    logDebug("Shader compiled");
   }
   return s;
 }
 
-static GLuint create_program(const char *frag_shader) {
-  GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader_src);
+static GLuint create_program(const char *frag_shader, const char *vert_shader) {
+  GLuint vs = compile_shader(GL_VERTEX_SHADER, vert_shader);
   GLuint fs = compile_shader(GL_FRAGMENT_SHADER, frag_shader);
 
   GLuint prog = glCreateProgram();
@@ -465,56 +512,40 @@ static void draw(client_state *st) {
 
     glEnd();
   };
-  
-  // Base multi
-  if (st->base_multipass) {
-    int read_buffer = st->current_buffer;
-    int write_buffer = 1 - st->current_buffer;
 
-    glUseProgram(st->shader_prog);
+  // Multipass
+  // for (ShaderLayer &shader : st->layers) {
+  for (std::size_t i = 0; i < st->layers.size(); ++i) {
+    if (st->layers[i].enabled && st->layers[i].multipass) {
+      int read_buffer = st->layers[i].current_buffer;
+      int write_buffer = 1 - st->layers[i].current_buffer;
 
-    glBindFramebuffer(GL_FRAMEBUFFER, st->fbo[write_buffer]);
-    glViewport(0, 0, st->width, st->height);
-    glClearColor(0.f, 0.f, 0.f, 0.f);
-    glClear(GL_COLOR_BUFFER_BIT);
+      glUseProgram(st->layers[i].prog);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, st->texture[read_buffer]);
+      glBindFramebuffer(GL_FRAMEBUFFER, st->layers[i].fbo[write_buffer]);
+      glViewport(0, 0, st->width, st->height);
+      glClearColor(0.f, 0.f, 0.f, 0.f);
+      glClear(GL_COLOR_BUFFER_BIT);
 
-    glUniform2f(st->u_resolution, st->width, st->height);
-    glUniform1f(st->u_time, t);
-    glUniform1f(st->u_frame, st->frame_count);
+      // cheat
+      if (st->layers[i].num == 0) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, st->layers[i].texture[read_buffer]);
+      } else if (st->layers[i].num == 1) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, st->layers[i - 1].texture[read_buffer]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, st->layers[i].texture[read_buffer]);
+      }
 
-    draw_fullscreen_quad(0);
+      glUniform2f(st->layers[i].u_resolution, st->width, st->height);
+      glUniform1f(st->layers[i].u_time, t);
+      glUniform1f(st->layers[i].u_frame, st->frame_count);
 
-    st->current_buffer = write_buffer;
-  }
+      draw_fullscreen_quad(0);
 
-  // Layer 1 multi
-  if (st->layer1_enabled && st->layer1_multipass) {
-    int read_buffer = st->layer1_current_buffer;
-    int write_buffer = 1 - st->layer1_current_buffer;
-
-    glUseProgram(st->layer1_prog);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, st->layer1_fbo[write_buffer]);
-    glViewport(0, 0, st->width, st->height);
-    glClearColor(0.f, 0.f, 0.f, 0.f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, st->texture[st->current_buffer]);
-
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, st->layer1_texture[read_buffer]);
-
-    glUniform2f(st->layer1_u_resolution, st->width, st->height);
-    glUniform1f(st->layer1_u_time, t);
-    glUniform1f(st->layer1_u_frame, st->frame_count);
-
-    draw_fullscreen_quad(0);
-
-    st->layer1_current_buffer = write_buffer;
+      st->layers[i].current_buffer = write_buffer;
+    }
   }
 
   // Composite
@@ -527,35 +558,20 @@ static void draw(client_state *st) {
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_TEXTURE_2D);
 
-  // Base
-  glUseProgram(st->shader_prog);
-  if (st->base_multipass) {
-    glBindTexture(GL_TEXTURE_2D, st->texture[st->current_buffer]);
+  for (ShaderLayer &shader : st->layers) {
+    if (shader.enabled) {
+      glUseProgram(shader.prog);
+      if (shader.multipass) {
+        glBindTexture(GL_TEXTURE_2D, shader.texture[shader.current_buffer]);
 
-    draw_fullscreen_quad(1);
-  } else {
-    glUniform2f(st->u_resolution, st->width, st->height);
-    glUniform1f(st->u_time, t);
-    glUniform1f(st->u_frame, st->frame_count);
+        draw_fullscreen_quad(1);
+      } else {
+        glUniform2f(shader.u_resolution, st->width, st->height);
+        glUniform1f(shader.u_time, t);
+        glUniform1f(shader.u_frame, st->frame_count);
 
-    draw_fullscreen_quad(0);
-  }
-
-  // Layer 1
-  if (st->layer1_enabled) {
-    glUseProgram(st->layer1_prog);
-
-    if (st->layer1_multipass) {
-      glBindTexture(GL_TEXTURE_2D,
-                    st->layer1_texture[st->layer1_current_buffer]);
-
-      draw_fullscreen_quad(1);
-    } else {
-      glUniform2f(st->layer1_u_resolution, st->width, st->height);
-      glUniform1f(st->layer1_u_time, t);
-      glUniform1f(st->layer1_u_frame, st->frame_count);
-
-      draw_fullscreen_quad(0);
+        draw_fullscreen_quad(0);
+      }
     }
   }
 
@@ -570,44 +586,18 @@ static void draw(client_state *st) {
   eglSwapBuffers(st->egl_display, st->egl_surface);
   st->frame_count++;
 }
-
 int main() {
   std::string programClass = "";
-  bool customShader = false;
-  // TODO: this is so messy
-  std::string userShader = load_shader_from_file("shader.frag");
-  std::string userVert = load_shader_from_file("shader.vert");
-  if (!userShader.empty()) {
-    customShader = true;
-    fragment_shader_src = userShader.c_str();
-
-    if (!userVert.empty()) {
-      vertex_shader_src = userVert.c_str();
-    } else {
-      logDebug("It's recommended you provide your own vertex file (shader.vert) "
-             "- using default");
-      vertex_shader_src = default_vert;
-    }
-  } else {
-    logDebug("No file 'shader.frag' next to program found - displaying default "
-           "test");
-    fragment_shader_src = default_frag;
-    vertex_shader_src = default_vert;
-  }
 
   client_state st{};
   st.settings = Settings();
-  if(!st.settings.load("wayshaders.conf")){
+  if (!st.settings.load("wayshaders.conf")) {
     st.settings.set_int("debug", 0);
     st.settings.set_string("class", "wgts");
-    st.settings.set_int("wrap_t", GL_REPEAT);
-    st.settings.set_int("wrap_s", GL_REPEAT);
     st.settings.save("wayshaders.conf");
-  }else{
+  } else {
     debug = st.settings.get_int("debug", 0);
     programClass = st.settings.get_string("class", "wgts");
-    st.setting_wrap_t = st.settings.get_int("wrap_t", GL_CLAMP_TO_EDGE);
-    st.setting_wrap_s = st.settings.get_int("wrap_s", GL_CLAMP_TO_EDGE);
   }
   st.width = 800;
   st.height = 600;
@@ -635,67 +625,83 @@ int main() {
   wl_surface_commit(st.surface);
 
   init_egl(&st);
-  st.shader_prog = create_program(fragment_shader_src);
-  logDebug("shader_prog created: %u", st.shader_prog);
 
-  GLint channel_base = glGetUniformLocation(st.shader_prog, "iChannel0");
-  if (channel_base != -1) {
-    logDebug("base - Multipass on");
-    st.base_multipass = true;
-  } else {
-    logDebug("base - multipass off");
-  }
-  st.u_resolution = glGetUniformLocation(st.shader_prog, "u_resolution");
-  st.u_time = glGetUniformLocation(st.shader_prog, "u_time");
-  st.u_frame = glGetUniformLocation(st.shader_prog, "u_frame");
-  logDebug("base uniforms: u_resolution=%d, u_time=%d u_frame=%d",
-         st.u_resolution, st.u_time, st.u_frame);
+  int shader_num = 0;
+  while (true) {
+    std::string shader_filename =
+        "shader" + std::to_string(shader_num) + ".frag";
+    std::string shader_code = load_shader_from_file(shader_filename);
 
-  // Load additional shaders
-  std::string test = "";
-  if (customShader) {
-    test = load_shader_from_file("shader2.frag");
-    if (test.length() < 2) {
-      logDebug("No shader2 / layer1 found");
-    } else {
-      fragment_shader2_src = test.c_str();
-      logDebug("Shader2 / layer1 loaded -> compiling");
-      st.layer1_enabled = true;
-      st.layer1_prog = create_program(fragment_shader2_src);
-      GLint channel_layer1 = glGetUniformLocation(st.layer1_prog, "iChannel1");
-      GLint channel_base_for_layer1 =
-          glGetUniformLocation(st.layer1_prog, "iChannel0");
-
-      if (channel_layer1 != -1) {
-        logDebug("layer1 - Multipass on");
-        st.layer1_multipass = true;
-      } else {
-        logDebug("layer1 - multipass off");
-      }
-      logDebug("layer1_prog created: %u", st.layer1_prog);
-      st.layer1_u_resolution =
-          glGetUniformLocation(st.layer1_prog, "u_resolution");
-      st.layer1_u_time = glGetUniformLocation(st.layer1_prog, "u_time");
-      st.layer1_u_frame = glGetUniformLocation(st.layer1_prog, "u_frame");
-      logDebug("layer1 uniforms: u_resolution=%d, u_time=%d u_frame=%d",
-             st.layer1_u_resolution, st.layer1_u_time, st.layer1_u_frame);
+    if (shader_code.empty()) {
+      // Will be num of loaded because ++ last run
+      logDebug("Shader loading complete - found %d shader(s)", shader_num);
+      break;
     }
+
+    logDebug("Found %s", shader_filename.c_str());
+
+    // Check for corresponding vertex shader
+    std::string vert_filename = "shader" + std::to_string(shader_num) + ".vert";
+    std::string vert_code = load_shader_from_file(vert_filename);
+
+    if (vert_code.empty()) {
+      logDebug("No %s found - using default vertex shader",
+               vert_filename.c_str());
+      vert_code = default_vert;
+    } else {
+      logDebug("Found %s", vert_filename.c_str());
+    }
+
+    ShaderLayer layer;
+    layer.enabled = true;
+    layer.num = shader_num;
+    layer.prog = create_program(shader_code.c_str(), vert_code.c_str());
+    layer.u_resolution = glGetUniformLocation(layer.prog, "u_resolution");
+    layer.u_time = glGetUniformLocation(layer.prog, "u_time");
+    layer.u_frame = glGetUniformLocation(layer.prog, "u_frame");
+    layer.fbo[0] = 0;
+    layer.fbo[1] = 0;
+    layer.texture[0] = 0;
+    layer.texture[1] = 0;
+    layer.current_buffer = 0;
+    // Multipass for self
+    std::string channel_name = "iChannel" + std::to_string(shader_num);
+    GLint channel_uniform =
+        glGetUniformLocation(layer.prog, channel_name.c_str());
+    if (channel_uniform != -1) {
+      logDebug("Layer %d - Multipass on", shader_num);
+      layer.multipass = true;
+    } else {
+      logDebug("Layer %d - Multipass OFF. No detected %s in shader.",
+               shader_num, channel_name.c_str());
+    }
+
+    GLint success;
+    glGetProgramiv(layer.prog, GL_LINK_STATUS, &success);
+    if (!success) {
+      char log[512];
+      glGetProgramInfoLog(layer.prog, 512, NULL, log);
+      logDebug("Shader linking for %d failed:\n%s", shader_num, log);
+      throw -1;
+    } else {
+      logDebug("Shader link for %d success", shader_num);
+    }
+
+    layer.setting_wrap_t = st.settings.get_int(
+        "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
+    layer.setting_wrap_s = st.settings.get_int(
+        "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
+    st.layers.push_back(layer);
+    shader_num++;
+  }
+
+  if (st.layers.empty()) {
+    printf("ERROR: No shaders found! Need at least shader0.frag\n");
+    return 1;
   }
 
   init_multipass(&st);
 
-  GLint success;
-  glGetProgramiv(st.shader_prog, GL_LINK_STATUS, &success);
-  if (!success) {
-    char log[512];
-    glGetProgramInfoLog(st.shader_prog, 512, NULL, log);
-    if (st.layer1_enabled)
-      glGetProgramInfoLog(st.layer1_prog, 512, NULL, log);
-
-    logDebug("Shader linking failed:\n%s", log);
-  } else {
-    logDebug("Shader link success");
-  }
   while (st.running) {
     wl_display_dispatch_pending(st.display);
     draw(&st);

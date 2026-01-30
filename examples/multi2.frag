@@ -1,23 +1,22 @@
-// Rename me shader2.frag
+// Rename me shader1.frag
 #version 460 core
 uniform vec2  u_resolution;
 uniform float u_time;
-uniform sampler2D iChannel0;
-//uniform sampler2D iChannel1; this shader feedback
+//uniform sampler2D iChannel0; shader0 tex
+uniform sampler2D iChannel1; // this shader tex
 
 out vec4 fragColor;
 
 void main()
 {
     vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-    
     // Only render on right half
-    if (uv.x < 0.3) {
+    if (uv.x < 0.5) {
         fragColor = vec4(0.0);
         return;
     }
     // Read previous frame
-    vec4 prev = texture(iChannel0, uv);
+    vec4 prev = texture(iChannel1, uv);
     prev *= 0.95; // Fade trail
     
     // Blue circle moving in figure-8 on RIGHT side

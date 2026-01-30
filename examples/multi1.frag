@@ -1,4 +1,4 @@
-// Rename me to shader.frag
+// Rename me to shader0.frag
 #version 460 core
 uniform vec2  u_resolution;
 uniform float u_time;
