@@ -139,6 +139,7 @@ struct ShaderLayer {
   int current_buffer;
   bool multipass;
   bool enabled;
+  std::vector<int> enabled_channels;
 
   int setting_wrap_t;
   int setting_wrap_s;
@@ -167,6 +168,41 @@ struct client_state {
 
   std::vector<ShaderLayer> layers;
   GLuint quad_vao, quad_vbo;
+};
+
+static constexpr GLint GL_TEX_INDEX[] = {
+    GL_TEXTURE0,
+    GL_TEXTURE1, 
+    GL_TEXTURE2,
+    GL_TEXTURE3,
+    GL_TEXTURE4, 
+    GL_TEXTURE5,
+    GL_TEXTURE6,
+    GL_TEXTURE7, 
+    GL_TEXTURE8,
+    GL_TEXTURE9,
+    GL_TEXTURE10, 
+    GL_TEXTURE11,
+    GL_TEXTURE12,
+    GL_TEXTURE13, 
+    GL_TEXTURE14,
+    GL_TEXTURE15,
+    GL_TEXTURE16,
+    GL_TEXTURE17, 
+    GL_TEXTURE18,
+    GL_TEXTURE19,
+    GL_TEXTURE20, 
+    GL_TEXTURE21,
+    GL_TEXTURE22,
+    GL_TEXTURE23, 
+    GL_TEXTURE24,
+    GL_TEXTURE25,
+    GL_TEXTURE26, 
+    GL_TEXTURE27,
+    GL_TEXTURE28,
+    GL_TEXTURE29, 
+    GL_TEXTURE30,
+    GL_TEXTURE31,
 };
 
 static void init_multipass(client_state *st) {
@@ -283,6 +319,8 @@ static void init_multipass(client_state *st) {
         if (channel != -1) {
           glUniform1i(channel, i);
           logDebug("Found %s in Shader %d", name.c_str(), shader.num);
+          // track enabled channel
+          shader.enabled_channels.push_back(i);
         }
       }
     }
@@ -527,14 +565,8 @@ static void draw(client_state *st) {
       glClearColor(0.f, 0.f, 0.f, 0.f);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      // cheat
-      if (st->layers[i].num == 0) {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, st->layers[i].texture[read_buffer]);
-      } else if (st->layers[i].num == 1) {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, st->layers[i - 1].texture[read_buffer]);
-        glActiveTexture(GL_TEXTURE1);
+      for (const int index : st->layers[i].enabled_channels) {
+        glActiveTexture(GL_TEX_INDEX[i]);
         glBindTexture(GL_TEXTURE_2D, st->layers[i].texture[read_buffer]);
       }
 
