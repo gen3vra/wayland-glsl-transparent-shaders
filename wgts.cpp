@@ -120,10 +120,24 @@ private:
     }
 };
 #pragma endregion
+static bool debug = false;
+void logDebug(const char* format, ...) {
+    if (!debug) return;
+    
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    printf("\n");
+}
+
 static const char *fragment_shader_src;
 static const char *fragment_shader2_src;
 struct client_state {
   Settings settings;
+  int setting_wrap_t = 0;
+  int setting_wrap_s = 0;
+  
   wl_display *display;
   wl_registry *registry;
   wl_compositor *compositor;
@@ -164,9 +178,6 @@ struct client_state {
 };
 
 static void init_multipass(client_state *st) {
-  GLint wrap_t = st->settings.get_int("wrap_t", GL_CLAMP_TO_EDGE);
-  GLint wrap_s = st->settings.get_int("wrap_s", GL_CLAMP_TO_EDGE);
-
   // Generate framebuffers and textures
   glGenFramebuffers(2, st->fbo);
   glGenTextures(2, st->texture);
@@ -178,8 +189,8 @@ static void init_multipass(client_state *st) {
                  GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
 
     // Attach texture to framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, st->fbo[i]);
@@ -187,7 +198,7 @@ static void init_multipass(client_state *st) {
                            st->texture[i], 0);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-      printf("Framebuffer %d not complete!\n", i);
+      logDebug("Framebuffer %d not complete!\n", i);
     }
   }
 
@@ -211,15 +222,15 @@ static void init_multipass(client_state *st) {
                    GL_UNSIGNED_BYTE, NULL);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
 
       glBindFramebuffer(GL_FRAMEBUFFER, st->layer1_fbo[i]);
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                              GL_TEXTURE_2D, st->layer1_texture[i], 0);
 
       if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        printf("Layer1 framebuffer %d not complete!\n", i);
+        logDebug("Layer1 framebuffer %d not complete!\n", i);
       }
     }
 
@@ -236,14 +247,11 @@ static void init_multipass(client_state *st) {
       glUniform1i(layer1_channel1, 1);
     }
 
-    printf("Layer1 multipass initialized\n");
+    logDebug("Layer1 multipass initialized\n");
   }
 }
 
 static void resize_multipass(client_state *st) {
-  GLint wrap_t = st->settings.get_int("wrap_t", GL_CLAMP_TO_EDGE);
-  GLint wrap_s = st->settings.get_int("wrap_s", GL_CLAMP_TO_EDGE);
-
   // Delete old textures
   glDeleteTextures(2, st->texture);
   if (st->layer1_multipass) {
@@ -259,8 +267,8 @@ static void resize_multipass(client_state *st) {
                  GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
 
     // Reattach to framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, st->fbo[i]);
@@ -269,7 +277,7 @@ static void resize_multipass(client_state *st) {
   }
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  printf("Resized FBO textures to %dx%d\n", st->width, st->height);
+  logDebug("Resized FBO textures to %dx%d\n", st->width, st->height);
 
   if (st->layer1_multipass) {
     glGenTextures(2, st->layer1_texture);
@@ -280,8 +288,8 @@ static void resize_multipass(client_state *st) {
                    GL_UNSIGNED_BYTE, NULL);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
 
       // Reattach to framebuffer
       glBindFramebuffer(GL_FRAMEBUFFER, st->layer1_fbo[i]);
@@ -290,7 +298,7 @@ static void resize_multipass(client_state *st) {
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    printf("Resized layer1 FBO textures to %dx%d\n", st->width, st->height);
+    logDebug("Resized layer1 FBO textures to %dx%d\n", st->width, st->height);
   }
 }
 
@@ -352,7 +360,7 @@ static void toplevel_configure(void *data, xdg_toplevel *, int32_t width,
   if (width > 0 && height > 0) {
     st->width = width;
     st->height = height;
-    // printf("Window resize\n");
+    // logDebug("Window resize\n");
     resize_multipass(st);
     wl_egl_window_resize(st->egl_window, width, height, 0, 0);
   }
@@ -411,9 +419,9 @@ static GLuint compile_shader(GLenum type, const char *src) {
   if (!success) {
     char log[512];
     glGetShaderInfoLog(s, 512, NULL, log);
-    printf("Shader compilation failed:\n%s\n", log);
+    logDebug("Shader compilation failed:\n%s\n", log);
   } else {
-    printf("Shader comp success\n");
+    logDebug("Shader comp success\n");
   }
   return s;
 }
@@ -556,7 +564,7 @@ static void draw(client_state *st) {
 
   GLenum err;
   while ((err = glGetError()) != GL_NO_ERROR) {
-    printf("OpenGL error: 0x%x\n", err);
+    logDebug("OpenGL error: 0x%x\n", err);
   }
 
   eglSwapBuffers(st->egl_display, st->egl_surface);
@@ -575,13 +583,12 @@ int main() {
     if (!userVert.empty()) {
       vertex_shader_src = userVert.c_str();
     } else {
-      printf("It's recommended you provide your own vertex file (shader.vert) "
+      logDebug("It's recommended you provide your own vertex file (shader.vert) "
              "- using default\n");
       vertex_shader_src = default_vert;
     }
   } else {
-    // Fall back to default shader with text message
-    printf("No file 'shader.frag' next to program found - displaying default "
+    logDebug("No file 'shader.frag' next to program found - displaying default "
            "test\n");
     fragment_shader_src = default_frag;
     vertex_shader_src = default_vert;
@@ -589,10 +596,15 @@ int main() {
 
   client_state st{};
   st.settings = Settings();
-  if(!st.settings.load("settings.yay")){
+  if(!st.settings.load("wayshaders.conf")){
+    st.settings.set_int("debug", 0);
     st.settings.set_int("wrap_t", GL_REPEAT);
     st.settings.set_int("wrap_s", GL_REPEAT);
-    st.settings.save("settings.yay");
+    st.settings.save("wayshaders.conf");
+  }else{
+    debug = st.settings.get_int("debug", 0);
+    st.setting_wrap_t = st.settings.get_int("wrap_t", GL_CLAMP_TO_EDGE);
+    st.setting_wrap_s = st.settings.get_int("wrap_s", GL_CLAMP_TO_EDGE);
   }
   st.width = 800;
   st.height = 600;
@@ -613,27 +625,27 @@ int main() {
 
   st.toplevel = xdg_surface_get_toplevel(st.xdg_surface_obj);
 
-  xdg_toplevel_set_title(st.toplevel, "yay");
-  xdg_toplevel_set_app_id(st.toplevel, "window-bg");
+  xdg_toplevel_set_title(st.toplevel, "wgts");
+  xdg_toplevel_set_app_id(st.toplevel, "window-bg"); // TODO: let them set this
   xdg_toplevel_add_listener(st.toplevel, &toplevel_listener, &st);
 
   wl_surface_commit(st.surface);
 
   init_egl(&st);
   st.shader_prog = create_program(fragment_shader_src);
-  printf("shader_prog created: %u\n", st.shader_prog);
+  logDebug("shader_prog created: %u\n", st.shader_prog);
 
   GLint channel_base = glGetUniformLocation(st.shader_prog, "iChannel0");
   if (channel_base != -1) {
-    printf("base - Multipass on\n");
+    logDebug("base - Multipass on\n");
     st.base_multipass = true;
   } else {
-    printf("base - multipass off\n");
+    logDebug("base - multipass off\n");
   }
   st.u_resolution = glGetUniformLocation(st.shader_prog, "u_resolution");
   st.u_time = glGetUniformLocation(st.shader_prog, "u_time");
   st.u_frame = glGetUniformLocation(st.shader_prog, "u_frame");
-  printf("base uniforms: u_resolution=%d, u_time=%d u_frame=%d\n",
+  logDebug("base uniforms: u_resolution=%d, u_time=%d u_frame=%d\n",
          st.u_resolution, st.u_time, st.u_frame);
 
   // Load additional shaders
@@ -641,10 +653,10 @@ int main() {
   if (customShader) {
     test = load_shader_from_file("shader2.frag");
     if (test.length() < 2) {
-      printf("No shader2 / layer1 found\n");
+      logDebug("No shader2 / layer1 found\n");
     } else {
       fragment_shader2_src = test.c_str();
-      printf("Shader2 / layer1 loaded -> compiling\n");
+      logDebug("Shader2 / layer1 loaded -> compiling\n");
       st.layer1_enabled = true;
       st.layer1_prog = create_program(fragment_shader2_src);
       GLint channel_layer1 = glGetUniformLocation(st.layer1_prog, "iChannel1");
@@ -652,17 +664,17 @@ int main() {
           glGetUniformLocation(st.layer1_prog, "iChannel0");
 
       if (channel_layer1 != -1) {
-        printf("layer1 - Multipass on\n");
+        logDebug("layer1 - Multipass on\n");
         st.layer1_multipass = true;
       } else {
-        printf("layer1 - multipass off\n");
+        logDebug("layer1 - multipass off\n");
       }
-      printf("layer1_prog created: %u\n", st.layer1_prog);
+      logDebug("layer1_prog created: %u\n", st.layer1_prog);
       st.layer1_u_resolution =
           glGetUniformLocation(st.layer1_prog, "u_resolution");
       st.layer1_u_time = glGetUniformLocation(st.layer1_prog, "u_time");
       st.layer1_u_frame = glGetUniformLocation(st.layer1_prog, "u_frame");
-      printf("layer1 uniforms: u_resolution=%d, u_time=%d u_frame=%d\n",
+      logDebug("layer1 uniforms: u_resolution=%d, u_time=%d u_frame=%d\n",
              st.layer1_u_resolution, st.layer1_u_time, st.layer1_u_frame);
     }
   }
@@ -677,9 +689,9 @@ int main() {
     if (st.layer1_enabled)
       glGetProgramInfoLog(st.layer1_prog, 512, NULL, log);
 
-    printf("Shader linking failed:\n%s\n", log);
+    logDebug("Shader linking failed:\n%s\n", log);
   } else {
-    printf("Shader link success\n");
+    logDebug("Shader link success\n");
   }
   while (st.running) {
     wl_display_dispatch_pending(st.display);
