@@ -170,89 +170,7 @@ struct client_state {
   GLuint quad_vao, quad_vbo;
 };
 
-static constexpr GLint GL_TEX_INDEX[] = {
-    GL_TEXTURE0,  GL_TEXTURE1,  GL_TEXTURE2,  GL_TEXTURE3,  GL_TEXTURE4,
-    GL_TEXTURE5,  GL_TEXTURE6,  GL_TEXTURE7,  GL_TEXTURE8,  GL_TEXTURE9,
-    GL_TEXTURE10, GL_TEXTURE11, GL_TEXTURE12, GL_TEXTURE13, GL_TEXTURE14,
-    GL_TEXTURE15, GL_TEXTURE16, GL_TEXTURE17, GL_TEXTURE18, GL_TEXTURE19,
-    GL_TEXTURE20, GL_TEXTURE21, GL_TEXTURE22, GL_TEXTURE23, GL_TEXTURE24,
-    GL_TEXTURE25, GL_TEXTURE26, GL_TEXTURE27, GL_TEXTURE28, GL_TEXTURE29,
-    GL_TEXTURE30, GL_TEXTURE31,
-};
-
 static void init_multipass(client_state *st) {
-  // Generate framebuffers and textures
-  /*
-  glGenFramebuffers(2, st->fbo);
-  glGenTextures(2, st->texture);
-
-  for (int i = 0; i < 2; i++) {
-    // Setup texture
-    glBindTexture(GL_TEXTURE_2D, st->texture[i]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, st->width, st->height, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
-
-    // Attach texture to framebuffer
-    glBindFramebuffer(GL_FRAMEBUFFER, st->fbo[i]);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                           st->texture[i], 0);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-      logDebug("Framebuffer %d not complete!", i);
-    }
-  }
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  st->current_buffer = 0;
-
-  // Get uniform location for texture sampler
-  glUseProgram(st->shader_prog);
-  GLint base_channel0 = glGetUniformLocation(st->shader_prog, "iChannel0");
-  if (base_channel0 != -1) {
-    glUniform1i(base_channel0, 0);
-  }
-
-  if (st->layer1_multipass) {
-    glGenFramebuffers(2, st->layer1_fbo);
-    glGenTextures(2, st->layer1_texture);
-
-    for (int i = 0; i < 2; i++) {
-      glBindTexture(GL_TEXTURE_2D, st->layer1_texture[i]);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, st->width, st->height, 0, GL_RGBA,
-                   GL_UNSIGNED_BYTE, NULL);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
-
-      glBindFramebuffer(GL_FRAMEBUFFER, st->layer1_fbo[i]);
-      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                             GL_TEXTURE_2D, st->layer1_texture[i], 0);
-
-      if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        logDebug("Layer1 framebuffer %d not complete!", i);
-      }
-    }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    st->layer1_current_buffer = 0;
-
-    glUseProgram(st->layer1_prog);
-    GLint layer1_channel0 = glGetUniformLocation(st->layer1_prog, "iChannel0");
-    if (layer1_channel0 != -1) {
-      glUniform1i(layer1_channel0, 0);
-    }
-    GLint layer1_channel1 = glGetUniformLocation(st->layer1_prog, "iChannel1");
-    if (layer1_channel1 != -1) {
-      glUniform1i(layer1_channel1, 1);
-    }
-
-    logDebug("Layer1 multipass initialized");
-  }*/
   for (ShaderLayer &shader : st->layers) {
     logDebug("Process shader%d multipass", shader.num);
     glUseProgram(shader.prog);
@@ -289,7 +207,7 @@ static void init_multipass(client_state *st) {
       // Check all possible channel vars
       for (std::size_t i = 0; i < st->layers.size(); i++) {
         logDebug("%d loop", i);
-        std::string name = "iChannel" + std::to_string(i);
+        std::string name = "u_sampler" + std::to_string(i);
         GLint channel = glGetUniformLocation(shader.prog, name.c_str());
         if (channel != -1) {
           glUniform1i(channel, i);
@@ -304,34 +222,6 @@ static void init_multipass(client_state *st) {
 
 static void resize_multipass(client_state *st) {
   logDebug("Resized window!");
-  /*
-  // Delete old textures
-  glDeleteTextures(2, st->texture);
-  if (st->layer1_multipass) {
-    glDeleteTextures(2, st->layer1_texture);
-  }
-
-  // My textures
-  glGenTextures(2, st->texture);
-
-  for (int i = 0; i < 2; i++) {
-    glBindTexture(GL_TEXTURE_2D, st->texture[i]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, st->width, st->height, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, st->setting_wrap_s);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, st->setting_wrap_t);
-
-    // Reattach to framebuffer
-    glBindFramebuffer(GL_FRAMEBUFFER, st->fbo[i]);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                           st->texture[i], 0);
-  }
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  logDebug("Resized FBO textures to %dx%d", st->width, st->height);
-*/
   for (ShaderLayer &shader : st->layers) {
     if (shader.multipass) {
       glDeleteTextures(2, shader.texture);
@@ -539,9 +429,11 @@ static void draw(client_state *st) {
       glClearColor(0.f, 0.f, 0.f, 0.f);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      for (const int index : shader.enabled_channels) {
-        glActiveTexture(GL_TEX_INDEX[index]);
-        glBindTexture(GL_TEXTURE_2D, st->layers[index].texture[read_buffer]);
+      for (int i = 0; i <= shader.num; ++i) {
+        glActiveTexture(GL_TEXTURE0 + i);
+        int buffer =
+            (i == shader.num) ? read_buffer : st->layers[i].current_buffer;
+        glBindTexture(GL_TEXTURE_2D, st->layers[i].texture[buffer]);
       }
 
       glUniform2f(shader.u_resolution, st->width, st->height);
@@ -597,10 +489,12 @@ int main(int argc, char *argv[]) {
   if (argc > 1) {
     std::string_view arg = argv[1];
     if (arg == "-h" || arg == "--help") {
-      printf(
-          "Displays shaders in a transparent window for Wayland. Place your shaders (up to 32) numbered as 'shader0.frag', 'shader1.frag', etc. in same directory.\n"
-          "You may provide shader[n].vert or a default will be used. Settings generated if no 'wayshaders.conf' in same directory.\n"
-          "\nCreated by Genevra Rose\n");
+      printf("Displays shaders in a transparent window for Wayland. Place your "
+             "shaders (up to 32) numbered as 'shader0.frag', 'shader1.frag', "
+             "etc. in same directory.\n"
+             "You may provide shader[n].vert or a default will be used. "
+             "Settings generated if no 'wayshaders.conf' in same directory.\n"
+             "\nCreated by Genevra Rose\n");
       return 0;
     }
   }
@@ -616,8 +510,8 @@ int main(int argc, char *argv[]) {
     debug = st.settings.get_int("debug", 0);
     programClass = st.settings.get_string("class", "wgts");
   }
-  st.width = 800;
-  st.height = 600;
+  st.width = 700;
+  st.height = 400;
   st.running = true;
 
   st.display = wl_display_connect(nullptr);
@@ -682,7 +576,7 @@ int main(int argc, char *argv[]) {
     layer.texture[1] = 0;
     layer.current_buffer = 0;
     // Multipass for self
-    std::string channel_name = "iChannel" + std::to_string(shader_num);
+    std::string channel_name = "u_sampler" + std::to_string(shader_num);
     GLint channel_uniform =
         glGetUniformLocation(layer.prog, channel_name.c_str());
     if (channel_uniform != -1) {
@@ -692,6 +586,8 @@ int main(int argc, char *argv[]) {
       logDebug("Layer %d - Multipass OFF. No detected %s in shader.",
                shader_num, channel_name.c_str());
     }
+    logDebug("Setting multipass true for shader test");
+    layer.multipass = true;
 
     GLint success;
     glGetProgramiv(layer.prog, GL_LINK_STATUS, &success);
@@ -699,15 +595,15 @@ int main(int argc, char *argv[]) {
       char log[512];
       glGetProgramInfoLog(layer.prog, 512, NULL, log);
       logDebug("Shader linking for %d failed:\n%s", shader_num, log);
-      throw -1;
+      exit(-1);
     } else {
       logDebug("Shader link for %d success", shader_num);
     }
 
     layer.setting_wrap_t = st.settings.get_int(
-        "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
+        "wrap_t" + std::to_string(shader_num), GL_CLAMP_TO_EDGE); //GL_REPEAT); // GL_CLAMP_TO_EDGE);
     layer.setting_wrap_s = st.settings.get_int(
-        "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
+        "wrap_t" + std::to_string(shader_num), GL_CLAMP_TO_EDGE);// GL_REPEAT); // GL_CLAMP_TO_EDGE);
     st.layers.push_back(layer);
     shader_num++;
   }

@@ -1,8 +1,12 @@
-i libwayland-dev libwayland-egl1 libwayland-egl++1 libegl1-mesa-dev libgl-dev wayland-protocols
+# wayshaders
+## Display GLSL shaders on a transparent window in Wayland
+Works well with Hyprwinwrap.
 
-Generate headers then
-`gcc -c xdg-shell.c -o xdg-shell.o`
+## Building
+`apt install libwayland-dev libwayland-egl1 libwayland-egl++1 libegl1-mesa-dev libgl-dev wayland-protocols` (Debian example)
 
-Build:
-`g++ wgts.cpp xdg-shell.o -o wayshaders -lwayland-client -lwayland-egl -lEGL -lGL`
+Run `./build.sh` in the project folder.
 
+1. `git clone https://github.com/gen3vra/wayland-glsl-transparent-shaders`
+2. `cd wayland-glsl-transparent-shaders`
+3. `./build.sh`
