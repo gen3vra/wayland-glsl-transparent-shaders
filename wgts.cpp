@@ -27,8 +27,6 @@ void main() {
 }
 )";
 
-static const char *vertex_shader_src;
-
 static const char *default_frag = R"(
 #version 120
 uniform vec2  u_resolution;
@@ -112,6 +110,24 @@ private:
     s.erase(s.find_last_not_of(ws) + 1);
   }
 };
+
+std::string get_config_file(const std::string &relative_file) {
+  const char *xdg = std::getenv("XDG_CONFIG_HOME");
+  std::string base;
+
+  if (xdg && xdg[0] != '\0') {
+    base = xdg;
+  } else {
+    const char *home = std::getenv("HOME");
+    if (!home || home[0] == '\0') {
+      return "";
+    }
+    base = std::string(home) + "/.config";
+  }
+
+  return base + "/wayshaders/" + relative_file;
+}
+
 #pragma endregion
 
 static bool debug = false;
@@ -126,8 +142,6 @@ void logDebug(const char *format, ...) {
   printf("\n");
 }
 
-static const char *fragment_shader_src;
-static const char *fragment_shader2_src;
 struct ShaderLayer {
   GLuint prog;
   int num; // layer num, 0 = base
@@ -429,7 +443,8 @@ static void draw(client_state *st) {
       glClearColor(0.f, 0.f, 0.f, 0.f);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      // TODO: What if shader0 has no multi, shader1 has no multi, shader2 has no multi but wants u_sampler0? 
+      // TODO: What if shader0 has no multi, shader1 has no multi, shader2 has
+      // no multi but wants u_sampler0?
       for (int i = 0; i <= shader.num; ++i) {
         glActiveTexture(GL_TEXTURE0 + i);
         int buffer =
@@ -492,9 +507,10 @@ int main(int argc, char *argv[]) {
     if (arg == "-h" || arg == "--help") {
       printf("Displays shaders in a transparent window for Wayland. Place your "
              "shaders (up to 32) numbered as 'shader0.frag', 'shader1.frag', "
-             "etc. in same directory.\n"
+             "etc. in XDG_CONFIG_HOME/wayshaders or usually "
+             "$HOME/.config/wayshaders.\n"
              "You may provide shader[n].vert or a default will be used. "
-             "Settings generated if no 'wayshaders.conf' in same directory.\n"
+             "Settings generated as 'wayshaders' in same directory.\n"
              "\nCreated by Genevra Rose\n");
       return 0;
     }
@@ -503,10 +519,10 @@ int main(int argc, char *argv[]) {
 
   client_state st{};
   st.settings = Settings();
-  if (!st.settings.load("wayshaders.conf")) {
+  if (!st.settings.load(get_config_file("wayshaders"))) {
     st.settings.set_int("debug", 0);
     st.settings.set_string("class", "wgts");
-    st.settings.save("wayshaders.conf");
+    st.settings.save(get_config_file("wayshaders"));
   } else {
     debug = st.settings.get_int("debug", 0);
     programClass = st.settings.get_string("class", "wgts");
@@ -542,7 +558,8 @@ int main(int argc, char *argv[]) {
   while (true) {
     std::string shader_filename =
         "shader" + std::to_string(shader_num) + ".frag";
-    std::string shader_code = load_shader_from_file(shader_filename);
+    std::string shader_code =
+        load_shader_from_file(get_config_file(shader_filename));
 
     if (shader_code.empty()) {
       // Will be num of loaded because ++ last run
@@ -554,7 +571,8 @@ int main(int argc, char *argv[]) {
 
     // Check for corresponding vertex shader
     std::string vert_filename = "shader" + std::to_string(shader_num) + ".vert";
-    std::string vert_code = load_shader_from_file(vert_filename);
+    std::string vert_code =
+        load_shader_from_file(get_config_file(vert_filename));
 
     if (vert_code.empty()) {
       logDebug("No %s found - using default vertex shader",
