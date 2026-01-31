@@ -429,6 +429,7 @@ static void draw(client_state *st) {
       glClearColor(0.f, 0.f, 0.f, 0.f);
       glClear(GL_COLOR_BUFFER_BIT);
 
+      // TODO: What if shader0 has no multi, shader1 has no multi, shader2 has no multi but wants u_sampler0? 
       for (int i = 0; i <= shader.num; ++i) {
         glActiveTexture(GL_TEXTURE0 + i);
         int buffer =
@@ -586,8 +587,6 @@ int main(int argc, char *argv[]) {
       logDebug("Layer %d - Multipass OFF. No detected %s in shader.",
                shader_num, channel_name.c_str());
     }
-    logDebug("Setting multipass true for shader test");
-    layer.multipass = true;
 
     GLint success;
     glGetProgramiv(layer.prog, GL_LINK_STATUS, &success);
@@ -601,9 +600,9 @@ int main(int argc, char *argv[]) {
     }
 
     layer.setting_wrap_t = st.settings.get_int(
-        "wrap_t" + std::to_string(shader_num), GL_CLAMP_TO_EDGE); //GL_REPEAT); // GL_CLAMP_TO_EDGE);
+        "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
     layer.setting_wrap_s = st.settings.get_int(
-        "wrap_t" + std::to_string(shader_num), GL_CLAMP_TO_EDGE);// GL_REPEAT); // GL_CLAMP_TO_EDGE);
+        "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
     st.layers.push_back(layer);
     shader_num++;
   }
