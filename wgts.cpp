@@ -443,8 +443,6 @@ static void draw(client_state *st) {
       glClearColor(0.f, 0.f, 0.f, 0.f);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      // TODO: What if shader0 has no multi, shader1 has no multi, shader2 has
-      // no multi but wants u_sampler0?
       for (int i = 0; i <= shader.num; ++i) {
         glActiveTexture(GL_TEXTURE0 + i);
         int buffer =
@@ -522,6 +520,8 @@ int main(int argc, char *argv[]) {
   if (!st.settings.load(get_config_file("wayshaders"))) {
     st.settings.set_int("debug", 0);
     st.settings.set_string("class", "wgts");
+    st.settings.set_int("wrap_t0", GL_CLAMP_TO_EDGE); // GL_CLAMP_TO_EDGE);
+    st.settings.set_int("wrap_s0", GL_CLAMP_TO_EDGE);
     st.settings.save(get_config_file("wayshaders"));
   } else {
     debug = st.settings.get_int("debug", 0);
@@ -594,16 +594,23 @@ int main(int argc, char *argv[]) {
     layer.texture[0] = 0;
     layer.texture[1] = 0;
     layer.current_buffer = 0;
-    // Multipass for self
-    std::string channel_name = "u_sampler" + std::to_string(shader_num);
-    GLint channel_uniform =
-        glGetUniformLocation(layer.prog, channel_name.c_str());
-    if (channel_uniform != -1) {
-      logDebug("Layer %d - Multipass on", shader_num);
-      layer.multipass = true;
-    } else {
-      logDebug("Layer %d - Multipass OFF. No detected %s in shader.",
-               shader_num, channel_name.c_str());
+
+    // Multipass enabling
+    for (int i = 0; i < shader_num; ++i) {
+      std::string channel_name = "u_sampler" + std::to_string(i);
+      GLint channel_uniform =
+          glGetUniformLocation(layer.prog, channel_name.c_str());
+
+      if (channel_uniform != -1) {
+        logDebug("Layer %d - Multipass ON (found %s)", i, channel_name.c_str());
+        if (i == shader_num)
+          layer.multipass = true;
+        else
+          st.layers[i].multipass = true;
+      } else {
+        logDebug("Layer %d - Multipass OFF. No detected %s in shader.", i,
+                 channel_name.c_str());
+      }
     }
 
     GLint success;
@@ -620,7 +627,7 @@ int main(int argc, char *argv[]) {
     layer.setting_wrap_t = st.settings.get_int(
         "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
     layer.setting_wrap_s = st.settings.get_int(
-        "wrap_t" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
+        "wrap_s" + std::to_string(shader_num), GL_REPEAT); // GL_CLAMP_TO_EDGE);
     st.layers.push_back(layer);
     shader_num++;
   }
